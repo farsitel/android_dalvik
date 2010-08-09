@@ -24,6 +24,10 @@ package org.apache.harmony.luni.util;
  */
 public final class FloatingPointParser {
 
+	final static char PERSIAN_ZERO = 0x06f0;
+	final static char PERSIAN_NINE = 0x06f9;
+	final static char PERSIAN_DECIMAL_POINT = 0x066b;
+
 	private static final class StringExponentPair {
 		String s;
 
@@ -107,6 +111,20 @@ public final class FloatingPointParser {
 			if (length == 0)
 				throw new NumberFormatException(s);
 		}
+
+		String result = "";
+		char ch;
+
+		for (int i = 0; i < s.length(); i++) {
+			ch = s.charAt(i);
+			if ((ch >= PERSIAN_ZERO) && (ch <= PERSIAN_NINE))
+				result += Character.toString((char)('0' + (ch - PERSIAN_ZERO)));
+			else if (ch == PERSIAN_DECIMAL_POINT)
+				result += '.';
+			else
+				result += ch;
+		}
+		s = result;
 
 		end = Math.max(s.indexOf('E'), s.indexOf('e'));
 		if (end > -1) {
