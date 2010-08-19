@@ -119,6 +119,12 @@ import org.apache.harmony.luni.util.LocaleCache;
  * <td width="30%">{@code format("%o %#o", 010, 010);}<br/>{@code format("%x %#x", 0x12, 0x12);}</td>
  * <td width="30%">{@code 10 010}<br/>{@code 12 0x12}</td>
  * </tr>
+ * <tr>
+ * <td width="5%">{@code L}</td>
+ * <td width="25%">Use Localized Digits</td>
+ * <td width="30%">{@code format(new Locale("fa"), "%Lf, %L03d, %s", 2.1, 78, "A2.1");}</td>
+ * <td width="30%"><pre>&#1778;&#1643;&#1777;, &#1776;&#1783;&#1784;, A&#1776;&#1783;&#1784;</pre></td>
+ * </tr>
  * </table>
  * <p>
  * <i>Width</i>. The width is a decimal integer specifying the minimum number of characters to be
@@ -526,6 +532,10 @@ format("%6.0E", 123.456f);</td>
  * @see java.text.SimpleDateFormat
  */
 public final class Formatter implements Closeable, Flushable {
+
+    final static char PERSIAN_ZERO = 0x06f0;
+    final static char PERSIAN_NINE = 0x06f9;
+    final static char PERSIAN_DECIMAL_POINT = 0x066b;
 
     /**
      * The enumeration giving the available styles for formatting very large
@@ -1160,6 +1170,7 @@ public final class Formatter implements Closeable, Flushable {
         boolean flagSharp;
         boolean flagSpace;
         boolean flagZero;
+        boolean flagLocalized;
 
         private char conversionType = (char) UNSET;
         private char dateSuffix;
@@ -1173,12 +1184,12 @@ public final class Formatter implements Closeable, Flushable {
         boolean isDefault() {
             // TODO: call hasDefaultFlags when the JIT can inline it.
             return !flagAdd && !flagComma && !flagMinus && !flagParenthesis && !flagSharp &&
-                    !flagSpace && !flagZero && width == UNSET && precision == UNSET;
+                    !flagSpace && !flagZero && !flagLocalized && width == UNSET && precision == UNSET;
         }
 
         boolean hasDefaultFlags() {
             return !flagAdd && !flagComma && !flagMinus && !flagParenthesis && !flagSharp &&
-                    !flagSpace && !flagZero;
+                    !flagSpace && !flagZero && !flagLocalized;
         }
 
         boolean isPrecisionSet() {
@@ -1256,6 +1267,10 @@ public final class Formatter implements Closeable, Flushable {
                 dupe = flagZero;
                 flagZero = true;
                 break;
+            case 'L':
+                dupe = flagLocalized;
+                flagLocalized = true;
+                break;
             default:
                 return false;
             }
@@ -1263,7 +1278,7 @@ public final class Formatter implements Closeable, Flushable {
                 throw new DuplicateFormatFlagsException(String.valueOf(ch));
             }
             if (strFlags == null) {
-                strFlags = new StringBuilder(7); // There are seven possible flags.
+                strFlags = new StringBuilder(8); // There are eight possible flags.
             }
             strFlags.append((char) ch);
             return true;
@@ -1589,6 +1604,18 @@ public final class Formatter implements Closeable, Flushable {
          * Pads characters to the formatted string.
          */
         private CharSequence padding(CharSequence source, int startIndex) {
+            if (formatToken.flagLocalized) {
+                source = new StringBuilder(source);
+                int n = source.length();
+                for (int i = 0; i < n; i++) {
+                    char ch = source.charAt(i);
+                    if ((ch >= '0') && (ch <= '9'))
+                        ((StringBuilder)source).setCharAt(i, (char)(PERSIAN_ZERO + (ch - '0')));
+                    else if (ch == '.')
+                        ((StringBuilder)source).setCharAt(i, PERSIAN_DECIMAL_POINT);
+                }
+            }
+
             boolean sourceIsStringBuilder = (source instanceof StringBuilder);
 
             int start = startIndex;
@@ -1613,7 +1640,7 @@ public final class Formatter implements Closeable, Flushable {
 
             char paddingChar = '\u0020'; // space as padding char.
             if (formatToken.flagZero) {
-                if (formatToken.getConversionType() == 'd') {
+                if (formatToken.flagLocalized && (formatToken.getConversionType() == 'd' || formatToken.getConversionType() == 'f')) {
                     paddingChar = getDecimalFormatSymbols().getZeroDigit();
                 } else {
                     paddingChar = '0';
@@ -1707,13 +1734,30 @@ public final class Formatter implements Closeable, Flushable {
                 throw new IllegalFormatFlagsException(formatToken.getStrFlags());
             }
 
+            char z;
+            if (formatToken.flagLocalized)
+                z =  (char) (getDecimalFormatSymbols().getZeroDigit() - '0');
+            else
+                z = '\0';
             if ('d' == currentConversionType) {
                 if (formatToken.flagComma) {
                     NumberFormat numberFormat = getNumberFormat();
                     numberFormat.setGroupingUsed(true);
                     result.append(numberFormat.format(arg));
                 } else {
-                    result.append(value);
+                    if (z != '\0') {
+                        String res = "";
+                        String src = "" + value;
+                        int i=0;
+                        if (src.charAt(0) == '-') {
+                            res += '-';
+                            i += 1;
+                        }
+                        for (; i<src.length(); i++)
+                            res += (char)(src.charAt(i) + z);
+                        result.append(res);
+                    } else
+                        result.append(value);
                 }
 
                 if (value < 0) {
@@ -2007,7 +2051,12 @@ public final class Formatter implements Closeable, Flushable {
             }
 
             if (null == dateTimeUtil) {
-                dateTimeUtil = new DateTimeUtil(locale);
+                char z;
+                if (formatToken.flagLocalized)
+                    z =  (char) (decimalFormatSymbols.getZeroDigit());
+                else
+                    z = '0';
+                dateTimeUtil = new DateTimeUtil(locale, z);
             }
             StringBuilder result = new StringBuilder();
             // output result
@@ -2169,7 +2218,12 @@ public final class Formatter implements Closeable, Flushable {
                 if (formatToken.getPrecision() > 0) {
                     patternBuilder.append('.');
                     char[] zeros = new char[formatToken.getPrecision()];
-                    Arrays.fill(zeros, '0');
+                    char z;
+                    if (formatToken.flagLocalized)
+                        z =  (char) (decimalFormatSymbols.getZeroDigit());
+                    else
+                        z = '0';
+                    Arrays.fill(zeros, z);
                     patternBuilder.append(zeros);
                 }
                 pattern = patternBuilder.toString();
@@ -2228,11 +2282,13 @@ public final class Formatter implements Closeable, Flushable {
         private Locale locale;
 
         private StringBuilder result;
+        private char zeroDigit = '0';
 
         private DateFormatSymbols dateFormatSymbols;
 
-        DateTimeUtil(Locale locale) {
+        DateTimeUtil(Locale locale, char zeroDigit) {
             this.locale = locale;
+            this.zeroDigit = zeroDigit;
         }
 
         void transform(FormatToken formatToken, Calendar aCalendar,
@@ -2379,7 +2435,7 @@ public final class Formatter implements Closeable, Flushable {
 
         private void transform_d() {
             int day = calendar.get(Calendar.DAY_OF_MONTH);
-            result.append(paddingZeros(day, 2));
+            result.append(paddingZeros(day, 2, zeroDigit));
         }
 
         private void transform_m() {
@@ -2387,29 +2443,29 @@ public final class Formatter implements Closeable, Flushable {
             // The returned month starts from zero, which needs to be
             // incremented by 1.
             month++;
-            result.append(paddingZeros(month, 2));
+            result.append(paddingZeros(month, 2, zeroDigit));
         }
 
         private void transform_j() {
             int day = calendar.get(Calendar.DAY_OF_YEAR);
-            result.append(paddingZeros(day, 3));
+            result.append(paddingZeros(day, 3, zeroDigit));
         }
 
         private void transform_y() {
             int year = calendar.get(Calendar.YEAR);
             year %= 100;
-            result.append(paddingZeros(year, 2));
+            result.append(paddingZeros(year, 2, zeroDigit));
         }
 
         private void transform_Y() {
             int year = calendar.get(Calendar.YEAR);
-            result.append(paddingZeros(year, 4));
+            result.append(paddingZeros(year, 4, zeroDigit));
         }
 
         private void transform_C() {
             int year = calendar.get(Calendar.YEAR);
             year /= 100;
-            result.append(paddingZeros(year, 2));
+            result.append(paddingZeros(year, 2, zeroDigit));
         }
 
         private void transform_a() {
@@ -2459,8 +2515,8 @@ public final class Formatter implements Closeable, Flushable {
                 offset = -offset;
             }
             result.append(sign);
-            result.append(paddingZeros(offset / 3600000, 2));
-            result.append(paddingZeros((offset % 3600000) / 60000, 2));
+            result.append(paddingZeros(offset / 3600000, 2, zeroDigit));
+            result.append(paddingZeros((offset % 3600000) / 60000, 2, zeroDigit));
         }
 
         private void transform_p(boolean isLowerCase) {
@@ -2474,22 +2530,22 @@ public final class Formatter implements Closeable, Flushable {
 
         private void transform_N() {
             long nanosecond = calendar.get(Calendar.MILLISECOND) * 1000000L;
-            result.append(paddingZeros(nanosecond, 9));
+            result.append(paddingZeros(nanosecond, 9, zeroDigit));
         }
 
         private void transform_L() {
             int millisecond = calendar.get(Calendar.MILLISECOND);
-            result.append(paddingZeros(millisecond, 3));
+            result.append(paddingZeros(millisecond, 3, zeroDigit));
         }
 
         private void transform_S() {
             int second = calendar.get(Calendar.SECOND);
-            result.append(paddingZeros(second, 2));
+            result.append(paddingZeros(second, 2, zeroDigit));
         }
 
         private void transform_M() {
             int minute = calendar.get(Calendar.MINUTE);
-            result.append(paddingZeros(minute, 2));
+            result.append(paddingZeros(minute, 2, zeroDigit));
         }
 
         private void transform_l() {
@@ -2510,12 +2566,12 @@ public final class Formatter implements Closeable, Flushable {
             if (0 == hour) {
                 hour = 12;
             }
-            result.append(paddingZeros(hour, 2));
+            result.append(paddingZeros(hour, 2, zeroDigit));
         }
 
         private void transform_H() {
             int hour = calendar.get(Calendar.HOUR_OF_DAY);
-            result.append(paddingZeros(hour, 2));
+            result.append(paddingZeros(hour, 2, zeroDigit));
         }
 
         private void transform_R() {
@@ -2573,10 +2629,25 @@ public final class Formatter implements Closeable, Flushable {
         }
 
         // TODO: this doesn't need a temporary StringBuilder!
-        private static String paddingZeros(long number, int length) {
+        private static String paddingZeros(long number, int length, char zeroDigit) {
             int len = length;
             StringBuilder result = new StringBuilder();
-            result.append(number);
+
+            char z = (char) (zeroDigit - '0');
+            if (z != '\0') {
+                String res = "";
+                String src = "" + number;
+                int i=0;
+                if (src.charAt(0) == '-') {
+                    res += '-';
+                    i += 1;
+                }
+                for (; i<src.length(); i++)
+                    res += (char)(src.charAt(i) + z);
+                result.append(res);
+            } else
+                result.append(number);
+
             int startIndex = 0;
             if (number < 0) {
                 len++;
@@ -2585,7 +2656,7 @@ public final class Formatter implements Closeable, Flushable {
             len -= result.length();
             if (len > 0) {
                 char[] zeros = new char[len];
-                Arrays.fill(zeros, '0');
+                Arrays.fill(zeros, zeroDigit);
                 result.insert(startIndex, zeros);
             }
             return result.toString();
@@ -2726,7 +2797,14 @@ public final class Formatter implements Closeable, Flushable {
         private int nextInt() {
             long value = 0;
             while (i < length && Character.isDigit(format.charAt(i))) {
-                value = 10 * value + (format.charAt(i++) - '0');
+                char c = format.charAt(i++);
+                if (c >= '\u06f0')
+                    c -= '\u06f0';
+                else if (c >= '\u0660')
+                    c -= '\u0660';
+                else
+                    c -= '0';
+                value = 10 * value + c;
                 if (value > Integer.MAX_VALUE) {
                     return failNextInt();
                 }

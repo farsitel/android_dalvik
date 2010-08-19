@@ -82,6 +82,10 @@ public final class DecimalFormatSymbols implements Cloneable, Serializable {
         this.infinity = localeData.infinity;
         this.NaN = localeData.NaN;
         this.locale = locale;
+
+        if ("fa".equals(locale.getLanguage()))
+            setZeroDigit('\u06f0');
+
         try {
             currency = Currency.getInstance(locale);
             currencySymbol = currency.getSymbol(locale);
