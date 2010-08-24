@@ -24,9 +24,9 @@ package org.apache.harmony.luni.util;
  */
 public final class FloatingPointParser {
 
-	final static char PERSIAN_ZERO = 0x06f0;
-	final static char PERSIAN_NINE = 0x06f9;
-	final static char PERSIAN_DECIMAL_POINT = 0x066b;
+	public final static char PERSIAN_ZERO = 0x06f0;
+	public final static char PERSIAN_NINE = 0x06f9;
+	public final static char PERSIAN_DECIMAL_POINT = 0x066b;
 
 	private static final class StringExponentPair {
 		String s;

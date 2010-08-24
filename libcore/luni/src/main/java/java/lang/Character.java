@@ -25,6 +25,9 @@ import java.io.Serializable;
 // import org.apache.harmony.luni.util.BinarySearch;
 // END android-removed
 
+import static org.apache.harmony.luni.util.FloatingPointParser.PERSIAN_ZERO;
+import static org.apache.harmony.luni.util.FloatingPointParser.PERSIAN_NINE;
+
 // BEGIN android-changed
 import com.ibm.icu4jni.lang.UCharacter;
 // END android-changed
@@ -2294,6 +2297,9 @@ public final class Character implements Serializable, Comparable<Character> {
             }
             return result < radix ? result : -1;
         }
+        if (PERSIAN_ZERO <= codePoint && codePoint <= PERSIAN_NINE) {
+            return codePoint - PERSIAN_ZERO;
+        }
         return UCharacter.digit(codePoint, radix);
         // END android-changed
     }
@@ -2378,6 +2384,9 @@ public final class Character implements Serializable, Comparable<Character> {
                 return codePoint - ('A' - 10);
             }
             return -1;
+        }
+        if (PERSIAN_ZERO <= codePoint && codePoint <= PERSIAN_NINE) {
+            return codePoint - PERSIAN_ZERO;
         }
         return UCharacter.getNumericValue(codePoint);
         // END android-changed
@@ -2553,6 +2562,9 @@ public final class Character implements Serializable, Comparable<Character> {
         // BEGIN android-changed
         // Optimized case for ASCII
         if ('0' <= codePoint && codePoint <= '9') {
+            return true;
+        }
+        if (PERSIAN_ZERO <= codePoint && codePoint <= PERSIAN_NINE) {
             return true;
         }
         if (codePoint < 1632) {
@@ -2790,6 +2802,9 @@ public final class Character implements Serializable, Comparable<Character> {
             return true;
         }
         if ('0' <= codePoint && codePoint <= '9') {
+            return true;
+        }
+        if (PERSIAN_ZERO <= codePoint && codePoint <= PERSIAN_NINE) {
             return true;
         }
         if (codePoint < 128) {
