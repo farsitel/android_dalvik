@@ -533,8 +533,6 @@ format("%6.0E", 123.456f);</td>
  */
 public final class Formatter implements Closeable, Flushable {
 
-    final static char PERSIAN_ZERO = 0x06f0;
-    final static char PERSIAN_NINE = 0x06f9;
     final static char PERSIAN_DECIMAL_POINT = 0x066b;
 
     /**
@@ -1604,13 +1602,15 @@ public final class Formatter implements Closeable, Flushable {
          * Pads characters to the formatted string.
          */
         private CharSequence padding(CharSequence source, int startIndex) {
-            if (formatToken.flagLocalized) {
+            char zero = getDecimalFormatSymbols().getZeroDigit();
+            if (formatToken.flagLocalized && zero != '0') {
+                char zeroDiff = (char) (zero - '0');
                 source = new StringBuilder(source);
                 int n = source.length();
                 for (int i = 0; i < n; i++) {
                     char ch = source.charAt(i);
                     if ((ch >= '0') && (ch <= '9'))
-                        ((StringBuilder)source).setCharAt(i, (char)(PERSIAN_ZERO + (ch - '0')));
+                        ((StringBuilder)source).setCharAt(i, (char)(ch + zeroDiff));
                     else if (ch == '.')
                         ((StringBuilder)source).setCharAt(i, PERSIAN_DECIMAL_POINT);
                 }
