@@ -448,6 +448,15 @@ public class SSLParameters implements Cloneable {
      * TODO: Move this to a published API under dalvik.system.
      */
     public static X509TrustManager getDefaultTrustManager() {
+// BEGIN farsitel-changed
+        try {
+            if (defaultTrustManager == null && defaultParameters == null) {
+                defaultParameters = new SSLParameters(null, null, null, null, null);
+            }
+        } catch (KeyManagementException kme) {
+        }
+// END farsitel-changed
+
         return defaultTrustManager;
     }
 }
